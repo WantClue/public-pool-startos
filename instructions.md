@@ -1,52 +1,86 @@
-# Public Pool Instructions
+# Public Pool
 
-StartOS does not support forwarding non-http ports yet (like the Stratum port). Until this is possible, you can use the following method to open and forward the Stratum port.
+## Documentation
 
-Login to StartOS over SSH and switch to the root user:
+- [Public Pool upstream README](https://github.com/benjamin-wilson/public-pool#readme) — the upstream project page, with background on the pool and protocol.
 
-    sudo -i
+## What you get on StartOS
 
-Run the following command to switch to the "chrooted" environment, any system changes made now will be persisted across reboots.
+- A **Web UI** interface — the Public Pool dashboard for watching workers, hashrate, and block discoveries.
+- A **Stratum Server** interface on TCP port 3333 — the endpoint your mining hardware points at.
+- Bitcoin Core auto-wired as a dependency: RPC over the cookie file and ZMQ block notifications are configured for you, so you do not edit `.env`.
 
-    /usr/lib/startos/scripts/chroot-and-upgrade
+## Getting set up
 
-Install "simpleproxy":
+1. Install Bitcoin Core first. Public Pool requires it and will run the **Auto Configure** task on Bitcoin Core to enable ZMQ before it can start.
+2. Install Public Pool. It will start automatically once Bitcoin Core is running and ZMQ is enabled.
+3. Open the **Configure** action and set:
+   - **Pool Identifier** — the string that appears in your coinbase transactions (default `Public-Pool`).
+   - **Server Display URL** — which of the Stratum interface's addresses to show on the dashboard as the connection URL for miners.
+4. Point your mining hardware at the Stratum server. See **Connecting miners** below — on StartOS today the Stratum port needs a one-time host-level forward.
 
-    apt update && apt install simpleproxy -y
+## Using Public Pool
 
-Paste the following, this will create a new systemd service responsible for port forwarding 3333 (Stratum):
+### Web UI
 
-```
-cat > /lib/systemd/system/simpleproxy.stratum.service <<'EOL'
-[Unit]
-Description=simpleproxy stratum forward
-Wants=podman.service
-After=podman.service
+Open the **Web UI** interface from the service page. The dashboard shows pool hashrate, your workers, recent blocks found, and the configured Stratum display URL miners should use.
 
-[Service]
-Type=simple
-Restart=always
-RestartSec=3
-ExecStartPre=/bin/bash -c "/bin/systemctl set-environment IP=$(ip route | grep default | awk '{print $9}' | head -1)"
-ExecStart=/usr/bin/simpleproxy -L ${IP}:3333 -R public-pool.embassy:3333
+### Configure action
 
-[Install]
-WantedBy=multi-user.target
-EOL
-```
+Run **Configure** whenever you want to change the coinbase pool identifier or pick a different Stratum display URL (for example after adding a new clearnet or LAN address to the Stratum interface).
 
-Enable the new systemd service:
+### Connecting miners
 
-    systemctl enable simpleproxy.stratum
+Miners must reach the Stratum server over raw TCP on port 3333, not over HTTP or Tor. Use the LAN IP of your StartOS device as the Stratum host, not its `.local` or `.onion` address.
 
-Now exit the chroot environment. this will reboot StartOS! **Do NOT close the SSH window manually, actually type `exit` and let it reboot.**
+## Limitations
 
-    exit
+StartOS does not yet forward non-HTTP ports for service interfaces, so the Stratum TCP port (3333) is not reachable from your LAN out of the box. Until native support lands, set up a one-time host-level forward:
 
-**NOTE:** do not use the .local or .onion address of this service for mining, use the IP address (and port 3333) of your StartOS device instead.
+1. SSH into your StartOS device and switch to root.
 
-To get the LAN IP address of your StartOS device, you can run the following command from another device on the same network:
+   ```
+   sudo -i
+   ```
 
-    ping -4 adjective-noun.local
+2. Enter the persistent chroot so the changes survive reboots.
 
-where `adjective-noun` is the name of your StartOS device you normally use to access the web interface.
+   ```
+   /usr/lib/startos/scripts/chroot-and-upgrade
+   ```
+
+3. Install `simpleproxy`.
+
+   ```
+   apt update && apt install simpleproxy -y
+   ```
+
+4. Create a systemd unit that forwards LAN TCP 3333 to the Public Pool container.
+
+   ```
+   cat > /lib/systemd/system/simpleproxy.stratum.service <<'EOL'
+   [Unit]
+   Description=simpleproxy stratum forward
+   Wants=podman.service
+   After=podman.service
+
+   [Service]
+   Type=simple
+   Restart=always
+   RestartSec=3
+   ExecStartPre=/bin/bash -c "/bin/systemctl set-environment IP=$(ip route | grep default | awk '{print $9}' | head -1)"
+   ExecStart=/usr/bin/simpleproxy -L ${IP}:3333 -R public-pool.embassy:3333
+
+   [Install]
+   WantedBy=multi-user.target
+   EOL
+   ```
+
+5. Enable the unit and exit the chroot. The `exit` triggers a reboot — type it, do not close the SSH session.
+
+   ```
+   systemctl enable simpleproxy.stratum
+   exit
+   ```
+
+After the reboot, miners can connect to `stratum+tcp://<your-startos-lan-ip>:3333`.

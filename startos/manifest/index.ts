@@ -9,7 +9,6 @@ export const manifest = setupManifest({
   upstreamRepo: 'https://github.com/benjamin-wilson/public-pool',
   marketingUrl: 'https://web.public-pool.io',
   donationUrl: 'https://web.public-pool.io',
-  docsUrls: ['https://github.com/benjamin-wilson/public-pool#readme'],
   description: { short, long },
   volumes: ['main'],
   images: {
