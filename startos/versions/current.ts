@@ -2,7 +2,7 @@ import { IMPOSSIBLE, VersionInfo, YAML } from '@start9labs/start-sdk'
 import { readFile, rm } from 'fs/promises'
 import { envFile } from '../file-models/env'
 
-export const v_0_2_5_8 = VersionInfo.of({
+export const current = VersionInfo.of({
   version: '0.2.5:8',
   releaseNotes: {
     en_US: `**Internal**
